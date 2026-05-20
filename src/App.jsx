@@ -183,7 +183,7 @@ export default function App() {
 
   function parseBulkOrders() {
     const parsed = bulkText
-.split("\n")
+.split("\\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
@@ -228,7 +228,7 @@ export default function App() {
 
   function parseBulkProducts() {
     const parsed = bulkProductText
-.split("\n")
+.split("\\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
