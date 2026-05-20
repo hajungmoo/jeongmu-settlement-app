@@ -748,31 +748,6 @@ function ProductTab({
         </div>
 
         <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
-          <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
-  <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
-
-  <textarea
-    value={bulkProductText}
-    onChange={(e) => setBulkProductText(e.target.value)}
-    placeholder={`예시
-테너지05 63000 72000
-MXP 40000 48000
-로제나 28000 35000`}
-    rows={5}
-    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
-  />
-
-  <button
-    onClick={parseBulkProducts}
-    className="mt-3 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
-  >
-    용품 가격 자동 저장
-  </button>
-
-  <p className="mt-2 text-xs text-slate-500">
-    용품명 + 받는가격 + 판매가격을 자동 인식합니다.
-  </p>
-</section>
           <Search size={18} className="text-slate-400" />
           <input
             value={productSearch}
@@ -809,6 +784,26 @@ MXP 40000 48000
         </div>
       </section>
 
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
+        <textarea
+          value={bulkProductText}
+          onChange={(e) => setBulkProductText(e.target.value)}
+          placeholder={`예시
+테너지05 63000 72000
+MXP 40000 48000
+로제나 28000 35000`}
+          rows={5}
+          className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+        />
+        <button
+          onClick={parseBulkProducts}
+          className="mt-3 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
+        >
+          용품 가격 자동 저장
+        </button>
+      </section>
+
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filteredProducts.map((product) => (
           <article key={product.id} className={`rounded-3xl border p-4 shadow-sm ${card}`}>
@@ -818,10 +813,14 @@ MXP 40000 48000
                 onChange={(e) => updateProduct(product.id, "name", e.target.value)}
                 className="w-full rounded-2xl bg-slate-50 px-3 py-3 font-bold text-slate-900 outline-none"
               />
-              <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-rose-100 p-3 text-rose-600">
+              <button
+                onClick={() => deleteProduct(product.id)}
+                className="rounded-2xl bg-rose-100 p-3 text-rose-600"
+              >
                 <Trash2 size={16} />
               </button>
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs font-bold text-blue-600">
                 받는가격
@@ -832,6 +831,7 @@ MXP 40000 48000
                   className="mt-1 w-full rounded-2xl bg-blue-50 px-3 py-3 text-slate-900 outline-none"
                 />
               </label>
+
               <label className="text-xs font-bold text-violet-600">
                 판매가격
                 <input
@@ -849,7 +849,10 @@ MXP 40000 48000
       <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
         <h2 className="mb-3 text-lg font-black">백업 / 복원</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white">
+          <button
+            onClick={downloadBackup}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white"
+          >
             <Download size={18} /> 백업 다운로드
           </button>
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
