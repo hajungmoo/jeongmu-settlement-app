@@ -72,6 +72,8 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [savedText, setSavedText] = useState("저장됨");
   const [newProduct, setNewProduct] = useState({ name: "", buyPrice: "", sellPrice: "" });
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBuyer, setBulkBuyer] = useState("");
 
   useEffect(() => {
     try {
@@ -159,6 +161,62 @@ export default function App() {
       },
       ...prev,
     ]);
+    setTab("settlement");
+  }
+
+  function findBestProductName(rawName) {
+    const normalize = (text) => String(text || "").toLowerCase().replaceAll(" ", "").replaceAll("-", "");
+    const target = normalize(rawName);
+    const exact = products.find((product) => normalize(product.name) === target);
+    if (exact) return exact.name;
+    const similar = products.find((product) => {
+      const name = normalize(product.name);
+      return name.includes(target) || target.includes(name);
+    });
+    return similar ? similar.name : rawName.trim();
+  }
+
+  function parseBulkOrders() {
+    const parsed = bulkText
+      .split("
+")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+        if (parts.length < 2) return null;
+        const last = parts[parts.length - 1];
+        const qtyText = last
+          .replaceAll("장", "")
+          .replaceAll("개", "")
+          .replaceAll("켤레", "")
+          .replaceAll("벌", "")
+          .replaceAll("자루", "")
+          .replaceAll("박스", "")
+          .replaceAll("통", "")
+          .replaceAll("세트", "");
+        const qty = Number(qtyText);
+        const rawName = parts.slice(0, -1).join(" ");
+        if (!rawName || !qty) return null;
+        return {
+          id: Date.now() + Math.random(),
+          date: today(),
+          buyer: bulkBuyer.trim(),
+          productName: findBestProductName(rawName),
+          qty,
+          done: false,
+        };
+      })
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      alert("인식된 주문이 없습니다. 예: MXP 4장");
+      return;
+    }
+
+    setOrders((prev) => [...parsed, ...prev]);
+    setBulkText("");
+    setBulkBuyer("");
     setTab("settlement");
   }
 
@@ -299,6 +357,11 @@ export default function App() {
               monthlyStats={monthlyStats}
               products={products}
               quickProducts={quickProducts}
+              bulkText={bulkText}
+              setBulkText={setBulkText}
+              bulkBuyer={bulkBuyer}
+              setBulkBuyer={setBulkBuyer}
+              parseBulkOrders={parseBulkOrders}
               addOrder={addOrder}
               updateOrder={updateOrder}
               deleteOrder={deleteOrder}
@@ -346,6 +409,11 @@ function SettlementTab({
   monthlyStats,
   products,
   quickProducts,
+  bulkText,
+  setBulkText,
+  bulkBuyer,
+  setBulkBuyer,
+  parseBulkOrders,
   addOrder,
   updateOrder,
   deleteOrder,
@@ -373,6 +441,37 @@ function SettlementTab({
           >
             <FileSpreadsheet size={18} /> 엑셀 다운로드
           </button>
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">대량 입력 자동정리</h2>
+        <div className="space-y-2">
+          <input
+            value={bulkBuyer}
+            onChange={(e) => setBulkBuyer(e.target.value)}
+            placeholder="주문자명, 비워도 됨"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+          />
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={`예시
+MXP 4장
+테너지05 3장
+디그닉스 05 3장
+넥시시합구6구 2개
+이너포스 ALC 1개`}
+            rows={6}
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+          />
+          <button
+            onClick={parseBulkOrders}
+            className="w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white shadow-lg shadow-violet-100"
+          >
+            자동으로 정산 추가
+          </button>
+          <p className="text-xs text-slate-500">용품명과 숫자를 자동으로 읽어서 정산 내역에 추가합니다.</p>
         </div>
       </section>
 
