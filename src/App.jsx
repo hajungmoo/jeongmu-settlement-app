@@ -1,6 +1,17 @@
-
 import React, { useEffect, useMemo, useState } from "react";
-import { Trash2, Search, Download, Upload, Save, Package, Calculator, WalletCards } from "lucide-react";
+import {
+  Calculator,
+  Download,
+  Home,
+  Package,
+  Plus,
+  Save,
+  Search,
+  Settings,
+  Trash2,
+  Upload,
+  WalletCards,
+} from "lucide-react";
 
 const defaultProducts = [
   { id: 1, name: "테너지05", buyPrice: 63000, sellPrice: 0 },
@@ -28,8 +39,8 @@ const defaultProducts = [
   { id: 23, name: "고급 라켓", buyPrice: 350000, sellPrice: 0 },
 ];
 
+const storageKey = "jeongmu-settlement-v2";
 const today = () => new Date().toISOString().slice(0, 10);
-const storageKey = "jeongmu-settlement-v1";
 
 function won(value) {
   return Number(value || 0).toLocaleString("ko-KR") + "원";
@@ -42,6 +53,7 @@ function koreanDate(value) {
 }
 
 export default function App() {
+  const [tab, setTab] = useState("settlement");
   const [products, setProducts] = useState(defaultProducts);
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState("");
@@ -67,49 +79,88 @@ export default function App() {
 
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.name, p])), [products]);
 
-  const calculatedOrders = useMemo(() => orders.map((order) => {
-    const product = productMap[order.productName] || {};
-    const qty = Number(order.qty || 0);
-    const buyPrice = Number(product.buyPrice || 0);
-    const sellPrice = Number(product.sellPrice || 0);
-    return { ...order, buyPrice, sellPrice, totalBuy: buyPrice * qty, totalSell: sellPrice * qty, profit: (sellPrice - buyPrice) * qty };
-  }), [orders, productMap]);
+  const calculatedOrders = useMemo(() => {
+    return orders.map((order) => {
+      const product = productMap[order.productName] || {};
+      const qty = Number(order.qty || 0);
+      const buyPrice = Number(product.buyPrice || 0);
+      const sellPrice = Number(product.sellPrice || 0);
+      const totalBuy = buyPrice * qty;
+      const totalSell = sellPrice * qty;
+      return { ...order, buyPrice, sellPrice, totalBuy, totalSell, profit: totalSell - totalBuy };
+    });
+  }, [orders, productMap]);
 
-  const dates = useMemo(() => Array.from(new Set(calculatedOrders.map((o) => o.date))).sort().reverse(), [calculatedOrders]);
-  const visibleOrders = dateFilter === "all" ? calculatedOrders : calculatedOrders.filter((o) => o.date === dateFilter);
+  const dates = useMemo(() => {
+    return Array.from(new Set(calculatedOrders.map((order) => order.date))).sort().reverse();
+  }, [calculatedOrders]);
 
-  const totals = useMemo(() => visibleOrders.reduce((acc, o) => ({
-    totalBuy: acc.totalBuy + o.totalBuy,
-    totalSell: acc.totalSell + o.totalSell,
-    profit: acc.profit + o.profit,
-  }), { totalBuy: 0, totalSell: 0, profit: 0 }), [visibleOrders]);
+  const visibleOrders = useMemo(() => {
+    if (dateFilter === "all") return calculatedOrders;
+    return calculatedOrders.filter((order) => order.date === dateFilter);
+  }, [calculatedOrders, dateFilter]);
 
-  const filteredProducts = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const totals = useMemo(() => {
+    return visibleOrders.reduce(
+      (acc, order) => ({
+        totalBuy: acc.totalBuy + order.totalBuy,
+        totalSell: acc.totalSell + order.totalSell,
+        profit: acc.profit + order.profit,
+      }),
+      { totalBuy: 0, totalSell: 0, profit: 0 }
+    );
+  }, [visibleOrders]);
+
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   function addOrder() {
-    setOrders((prev) => [{ id: Date.now(), date: today(), buyer: "", productName: products[0]?.name || "", qty: 1 }, ...prev]);
+    setOrders((prev) => [
+      {
+        id: Date.now(),
+        date: today(),
+        buyer: "",
+        productName: products[0]?.name || "",
+        qty: 1,
+      },
+      ...prev,
+    ]);
+    setTab("settlement");
   }
 
   function updateOrder(id, key, value) {
-    setOrders((prev) => prev.map((o) => o.id === id ? { ...o, [key]: value } : o));
+    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, [key]: value } : order)));
   }
 
   function deleteOrder(id) {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setOrders((prev) => prev.filter((order) => order.id !== id));
   }
 
   function addProduct() {
     if (!newProduct.name.trim()) return;
-    setProducts((prev) => [...prev, { id: Date.now(), name: newProduct.name.trim(), buyPrice: Number(newProduct.buyPrice || 0), sellPrice: Number(newProduct.sellPrice || 0) }]);
+    setProducts((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        name: newProduct.name.trim(),
+        buyPrice: Number(newProduct.buyPrice || 0),
+        sellPrice: Number(newProduct.sellPrice || 0),
+      },
+    ]);
     setNewProduct({ name: "", buyPrice: "", sellPrice: "" });
   }
 
   function updateProduct(id, key, value) {
-    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, [key]: key === "name" ? value : Number(value || 0) } : p));
+    setProducts((prev) =>
+      prev.map((product) =>
+        product.id === id ? { ...product, [key]: key === "name" ? value : Number(value || 0) } : product
+      )
+    );
   }
 
   function deleteProduct(id) {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setProducts((prev) => prev.filter((product) => product.id !== id));
   }
 
   function downloadBackup() {
@@ -139,109 +190,281 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-violet-100 via-pink-50 to-sky-100 p-3 text-slate-900 sm:p-5">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <section className="rounded-[2rem] bg-white/90 p-5 shadow-xl backdrop-blur">
-          <p className="text-sm font-bold text-violet-500">{koreanDate(today())}</p>
-          <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <main className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="mx-auto max-w-5xl pb-24">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-violet-700">정무의 정산앱</h1>
-              <p className="mt-1 text-sm text-slate-500">폰에서 편하게 쓰는 탁구용품 정산 관리</p>
+              <p className="text-xs font-bold text-violet-500">{koreanDate(today())}</p>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">정무의 정산앱</h1>
             </div>
-            <button onClick={addOrder} className="rounded-2xl bg-violet-600 px-5 py-3 font-black text-white shadow-lg shadow-violet-200">+ 정산 추가</button>
+            <button
+              onClick={addOrder}
+              className="rounded-2xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-violet-200"
+            >
+              + 정산
+            </button>
           </div>
-        </section>
+        </header>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SummaryCard icon={<Package size={22} />} title="총 받는가격" value={won(totals.totalBuy)} color="from-blue-500 to-sky-500" />
-          <SummaryCard icon={<WalletCards size={22} />} title="총 파는가격" value={won(totals.totalSell)} color="from-pink-500 to-rose-500" />
-          <SummaryCard icon={<Calculator size={22} />} title="총 정산금" value={won(totals.profit)} color="from-emerald-500 to-teal-500" />
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-black">정산 내역</h2>
-            <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
-              <option value="all">전체 날짜</option>
-              {dates.map((date) => <option key={date} value={date}>{koreanDate(date)}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-3">
-            {visibleOrders.length === 0 && <div className="rounded-3xl bg-slate-50 p-6 text-center text-sm text-slate-500">아직 정산 내역이 없습니다.</div>}
-            {visibleOrders.map((order) => (
-              <div key={order.id} className="rounded-3xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
-                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <input type="date" value={order.date} onChange={(e) => updateOrder(order.id, "date", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3" />
-                  <input value={order.buyer} onChange={(e) => updateOrder(order.id, "buyer", e.target.value)} placeholder="시킨사람" className="rounded-2xl border border-slate-200 px-3 py-3" />
-                  <button onClick={() => deleteOrder(order.id)} className="rounded-2xl bg-rose-100 px-3 py-3 font-bold text-rose-600 sm:ml-auto">삭제</button>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_0.6fr]">
-                  <select value={order.productName} onChange={(e) => updateOrder(order.id, "productName", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3">
-                    {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                  </select>
-                  <input type="number" value={order.qty} onChange={(e) => updateOrder(order.id, "qty", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3 text-center" placeholder="수량" />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-                  <Info label="받는가격" value={won(order.buyPrice)} color="bg-blue-50 text-blue-700" />
-                  <Info label="파는가격" value={won(order.sellPrice)} color="bg-pink-50 text-pink-700" />
-                  <Info label="총받는가격" value={won(order.totalBuy)} color="bg-slate-100 text-slate-700" />
-                  <Info label="총파는가격" value={won(order.totalSell)} color="bg-violet-50 text-violet-700" />
-                  <Info label="정산금" value={won(order.profit)} color="bg-emerald-50 text-emerald-700" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-black">용품 가격 저장</h2>
-            <Save className="text-violet-600" />
-          </div>
-          <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
-            <Search size={18} className="text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="용품 검색" className="w-full bg-transparent text-sm outline-none" />
-          </div>
-          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.7fr_0.7fr_auto]">
-            <input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="새 용품명" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <input value={newProduct.buyPrice} onChange={(e) => setNewProduct({ ...newProduct, buyPrice: e.target.value })} type="number" placeholder="받는가격" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <input value={newProduct.sellPrice} onChange={(e) => setNewProduct({ ...newProduct, sellPrice: e.target.value })} type="number" placeholder="파는가격" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <button onClick={addProduct} className="rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">추가</button>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="rounded-3xl bg-gradient-to-br from-violet-50 to-pink-50 p-3">
-                <div className="mb-2 flex gap-2">
-                  <input value={product.name} onChange={(e) => updateProduct(product.id, "name", e.target.value)} className="w-full rounded-2xl bg-white px-3 py-2 font-bold outline-none" />
-                  <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-white px-3 text-rose-500"><Trash2 size={16} /></button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs font-bold text-blue-600">받는가격<input type="number" value={product.buyPrice} onChange={(e) => updateProduct(product.id, "buyPrice", e.target.value)} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-slate-900 outline-none" /></label>
-                  <label className="text-xs font-bold text-pink-600">파는가격<input type="number" value={product.sellPrice} onChange={(e) => updateProduct(product.id, "sellPrice", e.target.value)} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-slate-900 outline-none" /></label>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <h2 className="mb-3 text-xl font-black">백업 / 복원</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white"><Download size={18} /> 백업 파일 다운로드</button>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white"><Upload size={18} /> 백업 파일 불러오기<input type="file" accept="application/json" onChange={uploadBackup} className="hidden" /></label>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">폰/컴퓨터를 같이 쓰려면 백업 파일을 옮겨서 불러오면 됩니다.</p>
-        </section>
+        <div className="space-y-4 p-4">
+          {tab === "settlement" ? (
+            <SettlementTab
+              totals={totals}
+              dates={dates}
+              dateFilter={dateFilter}
+              setDateFilter={setDateFilter}
+              visibleOrders={visibleOrders}
+              products={products}
+              updateOrder={updateOrder}
+              deleteOrder={deleteOrder}
+            />
+          ) : (
+            <ProductTab
+              products={products}
+              filteredProducts={filteredProducts}
+              search={search}
+              setSearch={setSearch}
+              newProduct={newProduct}
+              setNewProduct={setNewProduct}
+              addProduct={addProduct}
+              updateProduct={updateProduct}
+              deleteProduct={deleteProduct}
+              downloadBackup={downloadBackup}
+              uploadBackup={uploadBackup}
+            />
+          )}
+        </div>
       </div>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+          <TabButton active={tab === "settlement"} onClick={() => setTab("settlement")} icon={<Home size={20} />} label="정산" />
+          <TabButton active={tab === "products"} onClick={() => setTab("products")} icon={<Settings size={20} />} label="용품관리" />
+        </div>
+      </nav>
     </main>
   );
 }
 
-function SummaryCard({ icon, title, value, color }) {
-  return <div className={`rounded-[2rem] bg-gradient-to-br ${color} p-5 text-white shadow-xl`}><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20">{icon}</div><p className="text-sm font-bold opacity-80">{title}</p><p className="mt-1 text-2xl font-black">{value}</p></div>;
+function SettlementTab({ totals, dates, dateFilter, setDateFilter, visibleOrders, products, updateOrder, deleteOrder }) {
+  return (
+    <>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryCard icon={<Package size={22} />} title="총 받는금액" value={won(totals.totalBuy)} />
+        <SummaryCard icon={<WalletCards size={22} />} title="총 판매금액" value={won(totals.totalSell)} />
+        <SummaryCard icon={<Calculator size={22} />} title="총 정산금" value={won(totals.profit)} highlight />
+      </section>
+
+      <section className="rounded-[1.7rem] bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-black">정산 내역</h2>
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none"
+          >
+            <option value="all">전체 날짜</option>
+            {dates.map((date) => (
+              <option key={date} value={date}>{koreanDate(date)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-3">
+          {visibleOrders.length === 0 && (
+            <div className="rounded-3xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+              아직 정산 내역이 없습니다. 위쪽 + 정산 버튼을 눌러 추가하세요.
+            </div>
+          )}
+
+          {visibleOrders.map((order) => (
+            <article key={order.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <input
+                  type="date"
+                  value={order.date}
+                  onChange={(e) => updateOrder(order.id, "date", e.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                />
+                <button onClick={() => deleteOrder(order.id)} className="rounded-2xl bg-rose-100 px-3 py-2 text-sm font-bold text-rose-600">
+                  삭제
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <input
+                  value={order.buyer}
+                  onChange={(e) => updateOrder(order.id, "buyer", e.target.value)}
+                  placeholder="시킨사람"
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none"
+                />
+                <select
+                  value={order.productName}
+                  onChange={(e) => updateOrder(order.id, "productName", e.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3 outline-none sm:col-span-1"
+                >
+                  {products.map((product) => (
+                    <option key={product.id} value={product.name}>{product.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={order.qty}
+                  onChange={(e) => updateOrder(order.id, "qty", e.target.value)}
+                  placeholder="수량"
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center outline-none"
+                />
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+                <Info label="받는가격" value={won(order.buyPrice)} />
+                <Info label="판매가격" value={won(order.sellPrice)} />
+                <Info label="총받는가격" value={won(order.totalBuy)} />
+                <Info label="총판매금액" value={won(order.totalSell)} />
+                <Info label="정산금" value={won(order.profit)} green />
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
+  );
 }
 
-function Info({ label, value, color }) {
-  return <div className={`rounded-2xl p-3 ${color}`}><p className="text-xs font-bold opacity-70">{label}</p><p className="mt-1 font-black">{value}</p></div>;
+function ProductTab({ products, filteredProducts, search, setSearch, newProduct, setNewProduct, addProduct, updateProduct, deleteProduct, downloadBackup, uploadBackup }) {
+  return (
+    <>
+      <section className="rounded-[1.7rem] bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black">용품 가격 관리</h2>
+            <p className="text-xs text-slate-500">총 {products.length}개 용품 저장됨</p>
+          </div>
+          <Save className="text-violet-600" />
+        </div>
+
+        <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
+          <Search size={18} className="text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="용품 검색"
+            className="w-full bg-transparent text-sm outline-none"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.7fr_0.7fr_auto]">
+          <input
+            value={newProduct.name}
+            onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+            placeholder="새 용품명"
+            className="rounded-2xl border border-slate-200 px-3 py-3 outline-none"
+          />
+          <input
+            value={newProduct.buyPrice}
+            onChange={(e) => setNewProduct({ ...newProduct, buyPrice: e.target.value })}
+            type="number"
+            placeholder="받는가격"
+            className="rounded-2xl border border-slate-200 px-3 py-3 outline-none"
+          />
+          <input
+            value={newProduct.sellPrice}
+            onChange={(e) => setNewProduct({ ...newProduct, sellPrice: e.target.value })}
+            type="number"
+            placeholder="판매가격"
+            className="rounded-2xl border border-slate-200 px-3 py-3 outline-none"
+          />
+          <button onClick={addProduct} className="rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
+            추가
+          </button>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {filteredProducts.map((product) => (
+          <article key={product.id} className="rounded-3xl bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                value={product.name}
+                onChange={(e) => updateProduct(product.id, "name", e.target.value)}
+                className="w-full rounded-2xl bg-slate-50 px-3 py-3 font-bold outline-none"
+              />
+              <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-rose-100 p-3 text-rose-600">
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-bold text-blue-600">
+                받는가격
+                <input
+                  type="number"
+                  value={product.buyPrice}
+                  onChange={(e) => updateProduct(product.id, "buyPrice", e.target.value)}
+                  className="mt-1 w-full rounded-2xl bg-blue-50 px-3 py-3 text-slate-900 outline-none"
+                />
+              </label>
+              <label className="text-xs font-bold text-violet-600">
+                판매가격
+                <input
+                  type="number"
+                  value={product.sellPrice}
+                  onChange={(e) => updateProduct(product.id, "sellPrice", e.target.value)}
+                  className="mt-1 w-full rounded-2xl bg-violet-50 px-3 py-3 text-slate-900 outline-none"
+                />
+              </label>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="rounded-[1.7rem] bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-lg font-black">백업 / 복원</h2>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white">
+            <Download size={18} /> 백업 다운로드
+          </button>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
+            <Upload size={18} /> 백업 불러오기
+            <input type="file" accept="application/json" onChange={uploadBackup} className="hidden" />
+          </label>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function SummaryCard({ icon, title, value, highlight }) {
+  return (
+    <div className={`rounded-[1.7rem] p-4 shadow-sm ${highlight ? "bg-violet-600 text-white" : "bg-white text-slate-900"}`}>
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl ${highlight ? "bg-white/20" : "bg-violet-100 text-violet-600"}`}>
+        {icon}
+      </div>
+      <p className={`text-xs font-bold ${highlight ? "text-violet-100" : "text-slate-500"}`}>{title}</p>
+      <p className="mt-1 text-xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function Info({ label, value, green }) {
+  return (
+    <div className={`rounded-2xl p-3 ${green ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-800"}`}>
+      <p className="text-xs font-bold opacity-60">{label}</p>
+      <p className="mt-1 font-black">{value}</p>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
+        active ? "bg-violet-600 text-white shadow-lg shadow-violet-200" : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 }
