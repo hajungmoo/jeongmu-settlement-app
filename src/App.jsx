@@ -7,7 +7,6 @@ import {
   Home,
   Moon,
   Package,
-  Plus,
   Save,
   Search,
   Settings,
@@ -43,7 +42,7 @@ const defaultProducts = [
   { id: 23, name: "고급 라켓", buyPrice: 350000, sellPrice: 0 },
 ];
 
-const storageKey = "jeongmu-settlement-v3";
+const storageKey = "jeongmu-settlement-v4";
 const today = () => new Date().toISOString().slice(0, 10);
 
 function won(value) {
@@ -62,6 +61,10 @@ function monthKey(value) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function normalizeName(text) {
+  return String(text || "").toLowerCase().replaceAll(" ", "").replaceAll("-", "");
+}
+
 export default function App() {
   const [tab, setTab] = useState("settlement");
   const [products, setProducts] = useState(defaultProducts);
@@ -72,9 +75,9 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [savedText, setSavedText] = useState("저장됨");
   const [newProduct, setNewProduct] = useState({ name: "", buyPrice: "", sellPrice: "" });
-  const [bulkProductText, setBulkProductText] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [bulkBuyer, setBulkBuyer] = useState("");
+  const [bulkProductText, setBulkProductText] = useState("");
 
   useEffect(() => {
     try {
@@ -116,7 +119,7 @@ export default function App() {
   const visibleOrders = useMemo(() => {
     return calculatedOrders.filter((order) => {
       const dateOk = dateFilter === "all" || order.date === dateFilter;
-      const buyerOk = !buyerSearch.trim() || order.buyer.toLowerCase().includes(buyerSearch.toLowerCase());
+      const buyerOk = !buyerSearch.trim() || String(order.buyer || "").toLowerCase().includes(buyerSearch.toLowerCase());
       return dateOk && buyerOk;
     });
   }, [calculatedOrders, dateFilter, buyerSearch]);
@@ -150,6 +153,19 @@ export default function App() {
   const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(productSearch.toLowerCase()));
   const quickProducts = products.slice(0, 8);
 
+  function findBestProductName(rawName) {
+    const target = normalizeName(rawName);
+    const exact = products.find((product) => normalizeName(product.name) === target);
+    if (exact) return exact.name;
+
+    const similar = products.find((product) => {
+      const name = normalizeName(product.name);
+      return name.includes(target) || target.includes(name);
+    });
+
+    return similar ? similar.name : rawName.trim();
+  }
+
   function addOrder(productName = products[0]?.name || "") {
     setOrders((prev) => [
       {
@@ -165,26 +181,16 @@ export default function App() {
     setTab("settlement");
   }
 
-  function findBestProductName(rawName) {
-    const normalize = (text) => String(text || "").toLowerCase().replaceAll(" ", "").replaceAll("-", "");
-    const target = normalize(rawName);
-    const exact = products.find((product) => normalize(product.name) === target);
-    if (exact) return exact.name;
-    const similar = products.find((product) => {
-      const name = normalize(product.name);
-      return name.includes(target) || target.includes(name);
-    });
-    return similar ? similar.name : rawName.trim();
-  }
-
   function parseBulkOrders() {
     const parsed = bulkText
-      .split(/\n/)
+      .split("
+")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
         const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
-        if (parts.length < 3) return null;
+        if (parts.length < 2) return null;
+
         const last = parts[parts.length - 1];
         const qtyText = last
           .replaceAll("장", "")
@@ -198,6 +204,7 @@ export default function App() {
         const qty = Number(qtyText);
         const rawName = parts.slice(0, -1).join(" ");
         if (!rawName || !qty) return null;
+
         return {
           id: Date.now() + Math.random(),
           date: today(),
@@ -220,6 +227,51 @@ export default function App() {
     setTab("settlement");
   }
 
+  function parseBulkProducts() {
+    const parsed = bulkProductText
+      .split("
+")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+        if (parts.length < 3) return null;
+
+        const sellPrice = Number(parts[parts.length - 1].replace(/[^0-9]/g, ""));
+        const buyPrice = Number(parts[parts.length - 2].replace(/[^0-9]/g, ""));
+        const name = parts.slice(0, -2).join(" ");
+        if (!name || !buyPrice) return null;
+
+        return {
+          id: Date.now() + Math.random(),
+          name,
+          buyPrice,
+          sellPrice: sellPrice || 0,
+        };
+      })
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      alert("인식된 용품이 없습니다. 예: 테너지05 63000 72000");
+      return;
+    }
+
+    setProducts((prev) => {
+      const next = [...prev];
+      parsed.forEach((item) => {
+        const index = next.findIndex((product) => normalizeName(product.name) === normalizeName(item.name));
+        if (index >= 0) {
+          next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
+        } else {
+          next.push(item);
+        }
+      });
+      return next;
+    });
+
+    setBulkProductText("");
+  }
+
   function updateOrder(id, key, value) {
     setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, [key]: value } : order)));
   }
@@ -227,61 +279,7 @@ export default function App() {
   function deleteOrder(id) {
     setOrders((prev) => prev.filter((order) => order.id !== id));
   }
-function parseBulkProducts() {
-  const parsed = bulkProductText
-    .(/\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.replaceAll(",", " ").(" ").filter(Boolean);
 
-      if (parts.length < 3) return null;
-
-      const sellPrice = Number(parts[parts.length - 1]);
-      const buyPrice = Number(parts[parts.length - 2]);
-      const name = parts.slice(0, -2).join(" ");
-
-      return {
-        id: Date.now() + Math.random(),
-        name,
-        buyPrice,
-        sellPrice,
-      };
-    })
-    .filter(Boolean);
-
-  if (parsed.length === 0) {
-    alert("인식된 용품이 없습니다.");
-    return;
-  }
-
-  setProducts((prev) => [...prev, ...parsed]);
-  setBulkProductText("");
-}
-
-      if (parts.length < 3) return null;
-
-      const sellPrice = Number(parts[parts.length - 1]);
-      const buyPrice = Number(parts[parts.length - 2]);
-      const name = parts.slice(0, -2).join(" ");
-
-      return {
-        id: Date.now() + Math.random(),
-        name,
-        buyPrice,
-        sellPrice,
-      };
-    })
-    .filter(Boolean);
-
-  if (parsed.length === 0) {
-    alert("인식된 용품이 없습니다.");
-    return;
-  }
-
-  setProducts((prev) => [...prev, ...parsed]);
-  setBulkProductText("");
-}
   function addProduct() {
     if (!newProduct.name.trim()) return;
     setProducts((prev) => [
@@ -336,7 +334,8 @@ function parseBulkProducts() {
     const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
     const csvContent = [headers, ...csvRows, ...summaryRows]
       .map((row) => row.map(escapeCsv).join(","))
-      .join("\n");
+      .join("
+");
     const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -395,51 +394,52 @@ function parseBulkProducts() {
           </div>
         </header>
 
-<div className="space-y-4 p-4">
-  {tab === "settlement" ? (
-    <SettlementTab
-      darkMode={darkMode}
-      totals={totals}
-      dates={dates}
-      dateFilter={dateFilter}
-      setDateFilter={setDateFilter}
-      buyerSearch={buyerSearch}
-      setBuyerSearch={setBuyerSearch}
-      visibleOrders={visibleOrders}
-      recentOrders={recentOrders}
-      monthlyStats={monthlyStats}
-      products={products}
-      quickProducts={quickProducts}
-      bulkText={bulkText}
-      setBulkText={setBulkText}
-      bulkBuyer={bulkBuyer}
-      setBulkBuyer={setBulkBuyer}
-      parseBulkOrders={parseBulkOrders}
-      addOrder={addOrder}
-      updateOrder={updateOrder}
-      deleteOrder={deleteOrder}
-      downloadExcelCsv={downloadExcelCsv}
-    />
-  ) : (
-    <ProductTab
-      bulkProductText={bulkProductText}
-      setBulkProductText={setBulkProductText}
-      parseBulkProducts={parseBulkProducts}
-      darkMode={darkMode}
-      products={products}
-      filteredProducts={filteredProducts}
-      productSearch={productSearch}
-      setProductSearch={setProductSearch}
-      newProduct={newProduct}
-      setNewProduct={setNewProduct}
-      addProduct={addProduct}
-      updateProduct={updateProduct}
-      deleteProduct={deleteProduct}
-      downloadBackup={downloadBackup}
-      uploadBackup={uploadBackup}
-    />
-  )}
-</div>
+        <div className="space-y-4 p-4">
+          {tab === "settlement" ? (
+            <SettlementTab
+              darkMode={darkMode}
+              totals={totals}
+              dates={dates}
+              dateFilter={dateFilter}
+              setDateFilter={setDateFilter}
+              buyerSearch={buyerSearch}
+              setBuyerSearch={setBuyerSearch}
+              visibleOrders={visibleOrders}
+              recentOrders={recentOrders}
+              monthlyStats={monthlyStats}
+              products={products}
+              quickProducts={quickProducts}
+              bulkText={bulkText}
+              setBulkText={setBulkText}
+              bulkBuyer={bulkBuyer}
+              setBulkBuyer={setBulkBuyer}
+              parseBulkOrders={parseBulkOrders}
+              addOrder={addOrder}
+              updateOrder={updateOrder}
+              deleteOrder={deleteOrder}
+              downloadExcelCsv={downloadExcelCsv}
+            />
+          ) : (
+            <ProductTab
+              bulkProductText={bulkProductText}
+              setBulkProductText={setBulkProductText}
+              parseBulkProducts={parseBulkProducts}
+              darkMode={darkMode}
+              products={products}
+              filteredProducts={filteredProducts}
+              productSearch={productSearch}
+              setProductSearch={setProductSearch}
+              newProduct={newProduct}
+              setNewProduct={setNewProduct}
+              addProduct={addProduct}
+              updateProduct={updateProduct}
+              deleteProduct={deleteProduct}
+              downloadBackup={downloadBackup}
+              uploadBackup={uploadBackup}
+            />
+          )}
+        </div>
+      </div>
 
       <nav className={`fixed bottom-0 left-0 right-0 z-30 border-t px-4 py-3 backdrop-blur ${headerClass}`}>
         <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
@@ -777,6 +777,7 @@ MXP 40000 48000
         >
           용품 가격 자동 저장
         </button>
+        <p className="mt-2 text-xs text-slate-500">용품명 + 받는가격 + 판매가격을 자동 인식합니다.</p>
       </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -788,14 +789,10 @@ MXP 40000 48000
                 onChange={(e) => updateProduct(product.id, "name", e.target.value)}
                 className="w-full rounded-2xl bg-slate-50 px-3 py-3 font-bold text-slate-900 outline-none"
               />
-              <button
-                onClick={() => deleteProduct(product.id)}
-                className="rounded-2xl bg-rose-100 p-3 text-rose-600"
-              >
+              <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-rose-100 p-3 text-rose-600">
                 <Trash2 size={16} />
               </button>
             </div>
-
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs font-bold text-blue-600">
                 받는가격
@@ -806,7 +803,6 @@ MXP 40000 48000
                   className="mt-1 w-full rounded-2xl bg-blue-50 px-3 py-3 text-slate-900 outline-none"
                 />
               </label>
-
               <label className="text-xs font-bold text-violet-600">
                 판매가격
                 <input
@@ -824,10 +820,7 @@ MXP 40000 48000
       <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
         <h2 className="mb-3 text-lg font-black">백업 / 복원</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            onClick={downloadBackup}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white"
-          >
+          <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white">
             <Download size={18} /> 백업 다운로드
           </button>
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
