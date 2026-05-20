@@ -229,11 +229,11 @@ export default function App() {
   }
 function parseBulkProducts() {
   const parsed = bulkProductText
-    .split(/\n/)
+    .(/\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+      const parts = line.replaceAll(",", " ").(" ").filter(Boolean);
 
       if (parts.length < 3) return null;
 
@@ -258,11 +258,6 @@ function parseBulkProducts() {
   setProducts((prev) => [...prev, ...parsed]);
   setBulkProductText("");
 }
-    .split(/\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
 
       if (parts.length < 3) return null;
 
