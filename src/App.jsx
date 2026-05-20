@@ -72,6 +72,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [savedText, setSavedText] = useState("저장됨");
   const [newProduct, setNewProduct] = useState({ name: "", buyPrice: "", sellPrice: "" });
+  const [bulkProductText, setBulkProductText] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [bulkBuyer, setBulkBuyer] = useState("");
 
@@ -226,7 +227,57 @@ export default function App() {
   function deleteOrder(id) {
     setOrders((prev) => prev.filter((order) => order.id !== id));
   }
+function parseBulkProducts() {
+  const parsed = bulkProductText
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+      if (parts.length < 2) return null;
 
+      const sellPrice = Number(parts[parts.length - 1].replace(/[^0-9]/g, ""));
+      const buyPrice = Number(parts[parts.length - 2].replace(/[^0-9]/g, ""));
+      const name = parts.slice(0, -2).join(" ");
+
+      if (!name || !buyPrice) return null;
+
+      return {
+        id: Date.now() + Math.random(),
+        name,
+        buyPrice,
+        sellPrice: sellPrice || 0,
+      };
+    })
+    .filter(Boolean);
+
+  if (parsed.length === 0) {
+    alert("인식된 용품이 없습니다. 예: 테너지05 63000 72000");
+    return;
+  }
+
+  setProducts((prev) => {
+    const next = [...prev];
+
+    parsed.forEach((item) => {
+      const index = next.findIndex(
+        (product) =>
+          product.name.replaceAll(" ", "").toLowerCase() ===
+          item.name.replaceAll(" ", "").toLowerCase()
+      );
+
+      if (index >= 0) {
+        next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
+      } else {
+        next.push(item);
+      }
+    });
+
+    return next;
+  });
+
+  setBulkProductText("");
+}
   function addProduct() {
     if (!newProduct.name.trim()) return;
     setProducts((prev) => [
@@ -367,6 +418,28 @@ export default function App() {
             />
           ) : (
             <ProductTab
+              <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+  <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
+  <textarea
+    value={bulkProductText}
+    onChange={(e) => setBulkProductText(e.target.value)}
+    placeholder={`예시
+테너지05 63000 72000
+MXP 40000 48000
+로제나 28000 35000`}
+    rows={5}
+    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+  />
+  <button
+    onClick={parseBulkProducts}
+    className="mt-2 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
+  >
+    용품 가격 자동 저장
+  </button>
+</section>
+              bulkProductText={bulkProductText}
+setBulkProductText={setBulkProductText}
+parseBulkProducts={parseBulkProducts}
               darkMode={darkMode}
               products={products}
               filteredProducts={filteredProducts}
@@ -636,6 +709,9 @@ function OrderCard({ darkMode, order, products, updateOrder, deleteOrder }) {
 }
 
 function ProductTab({
+  bulkProductText,
+setBulkProductText,
+parseBulkProducts,
   darkMode,
   products,
   filteredProducts,
