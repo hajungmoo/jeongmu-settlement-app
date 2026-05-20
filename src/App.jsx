@@ -1,6 +1,20 @@
-
 import React, { useEffect, useMemo, useState } from "react";
-import { Trash2, Search, Download, Upload, Save, Package, Calculator, WalletCards } from "lucide-react";
+import {
+  Calculator,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Home,
+  Moon,
+  Package,
+  Save,
+  Search,
+  Settings,
+  Sun,
+  Trash2,
+  Upload,
+  WalletCards,
+} from "lucide-react";
 
 const defaultProducts = [
   { id: 1, name: "테너지05", buyPrice: 63000, sellPrice: 0 },
@@ -28,8 +42,8 @@ const defaultProducts = [
   { id: 23, name: "고급 라켓", buyPrice: 350000, sellPrice: 0 },
 ];
 
+const storageKey = "jeongmu-settlement-v4";
 const today = () => new Date().toISOString().slice(0, 10);
-const storageKey = "jeongmu-settlement-v1";
 
 function won(value) {
   return Number(value || 0).toLocaleString("ko-KR") + "원";
@@ -41,12 +55,29 @@ function koreanDate(value) {
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
+function monthKey(value) {
+  const d = value ? new Date(value) : new Date();
+  if (Number.isNaN(d.getTime())) return "날짜 없음";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function normalizeName(text) {
+  return String(text || "").toLowerCase().replaceAll(" ", "").replaceAll("-", "");
+}
+
 export default function App() {
+  const [tab, setTab] = useState("settlement");
   const [products, setProducts] = useState(defaultProducts);
   const [orders, setOrders] = useState([]);
-  const [search, setSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [buyerSearch, setBuyerSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
+  const [darkMode, setDarkMode] = useState(false);
+  const [savedText, setSavedText] = useState("저장됨");
   const [newProduct, setNewProduct] = useState({ name: "", buyPrice: "", sellPrice: "" });
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBuyer, setBulkBuyer] = useState("");
+  const [bulkProductText, setBulkProductText] = useState("");
 
   useEffect(() => {
     try {
@@ -55,6 +86,7 @@ export default function App() {
         const data = JSON.parse(saved);
         if (Array.isArray(data.products)) setProducts(data.products);
         if (Array.isArray(data.orders)) setOrders(data.orders);
+        if (typeof data.darkMode === "boolean") setDarkMode(data.darkMode);
       }
     } catch (error) {
       console.error("저장 데이터 불러오기 실패", error);
@@ -62,62 +94,253 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify({ products, orders }));
-  }, [products, orders]);
+    localStorage.setItem(storageKey, JSON.stringify({ products, orders, darkMode }));
+    setSavedText("저장됨");
+    const timer = setTimeout(() => setSavedText("자동 저장"), 1200);
+    return () => clearTimeout(timer);
+  }, [products, orders, darkMode]);
 
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.name, p])), [products]);
 
-  const calculatedOrders = useMemo(() => orders.map((order) => {
-    const product = productMap[order.productName] || {};
-    const qty = Number(order.qty || 0);
-    const buyPrice = Number(product.buyPrice || 0);
-    const sellPrice = Number(product.sellPrice || 0);
-    return { ...order, buyPrice, sellPrice, totalBuy: buyPrice * qty, totalSell: sellPrice * qty, profit: (sellPrice - buyPrice) * qty };
-  }), [orders, productMap]);
+  const calculatedOrders = useMemo(() => {
+    return orders.map((order) => {
+      const product = productMap[order.productName] || {};
+      const qty = Number(order.qty || 0);
+      const buyPrice = Number(product.buyPrice || 0);
+      const sellPrice = Number(product.sellPrice || 0);
+      const totalBuy = buyPrice * qty;
+      const totalSell = sellPrice * qty;
+      return { ...order, buyPrice, sellPrice, totalBuy, totalSell, profit: totalSell - totalBuy };
+    });
+  }, [orders, productMap]);
 
   const dates = useMemo(() => Array.from(new Set(calculatedOrders.map((o) => o.date))).sort().reverse(), [calculatedOrders]);
-  const visibleOrders = dateFilter === "all" ? calculatedOrders : calculatedOrders.filter((o) => o.date === dateFilter);
 
-  const totals = useMemo(() => visibleOrders.reduce((acc, o) => ({
-    totalBuy: acc.totalBuy + o.totalBuy,
-    totalSell: acc.totalSell + o.totalSell,
-    profit: acc.profit + o.profit,
-  }), { totalBuy: 0, totalSell: 0, profit: 0 }), [visibleOrders]);
+  const visibleOrders = useMemo(() => {
+    return calculatedOrders.filter((order) => {
+      const dateOk = dateFilter === "all" || order.date === dateFilter;
+      const buyerOk = !buyerSearch.trim() || String(order.buyer || "").toLowerCase().includes(buyerSearch.toLowerCase());
+      return dateOk && buyerOk;
+    });
+  }, [calculatedOrders, dateFilter, buyerSearch]);
 
-  const filteredProducts = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const recentOrders = useMemo(() => calculatedOrders.slice(0, 5), [calculatedOrders]);
 
-  function addOrder() {
-    setOrders((prev) => [{ id: Date.now(), date: today(), buyer: "", productName: products[0]?.name || "", qty: 1 }, ...prev]);
+  const monthlyStats = useMemo(() => {
+    const map = {};
+    calculatedOrders.forEach((order) => {
+      const key = monthKey(order.date);
+      if (!map[key]) map[key] = { month: key, totalBuy: 0, totalSell: 0, profit: 0, count: 0 };
+      map[key].totalBuy += order.totalBuy;
+      map[key].totalSell += order.totalSell;
+      map[key].profit += order.profit;
+      map[key].count += 1;
+    });
+    return Object.values(map).sort((a, b) => b.month.localeCompare(a.month));
+  }, [calculatedOrders]);
+
+  const totals = useMemo(() => {
+    return visibleOrders.reduce(
+      (acc, order) => ({
+        totalBuy: acc.totalBuy + order.totalBuy,
+        totalSell: acc.totalSell + order.totalSell,
+        profit: acc.profit + order.profit,
+      }),
+      { totalBuy: 0, totalSell: 0, profit: 0 }
+    );
+  }, [visibleOrders]);
+
+  const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(productSearch.toLowerCase()));
+  const quickProducts = products.slice(0, 8);
+
+  function findBestProductName(rawName) {
+    const target = normalizeName(rawName);
+    const exact = products.find((product) => normalizeName(product.name) === target);
+    if (exact) return exact.name;
+
+    const similar = products.find((product) => {
+      const name = normalizeName(product.name);
+      return name.includes(target) || target.includes(name);
+    });
+
+    return similar ? similar.name : rawName.trim();
+  }
+
+  function addOrder(productName = products[0]?.name || "") {
+    setOrders((prev) => [
+      {
+        id: Date.now(),
+        date: today(),
+        buyer: "",
+        productName,
+        qty: 1,
+        done: false,
+      },
+      ...prev,
+    ]);
+    setTab("settlement");
+  }
+
+  function parseBulkOrders() {
+    const parsed = bulkText
+      .split("
+")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+        if (parts.length < 2) return null;
+
+        const last = parts[parts.length - 1];
+        const qtyText = last
+          .replaceAll("장", "")
+          .replaceAll("개", "")
+          .replaceAll("켤레", "")
+          .replaceAll("벌", "")
+          .replaceAll("자루", "")
+          .replaceAll("박스", "")
+          .replaceAll("통", "")
+          .replaceAll("세트", "");
+        const qty = Number(qtyText);
+        const rawName = parts.slice(0, -1).join(" ");
+        if (!rawName || !qty) return null;
+
+        return {
+          id: Date.now() + Math.random(),
+          date: today(),
+          buyer: bulkBuyer.trim(),
+          productName: findBestProductName(rawName),
+          qty,
+          done: false,
+        };
+      })
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      alert("인식된 주문이 없습니다. 예: MXP 4장");
+      return;
+    }
+
+    setOrders((prev) => [...parsed, ...prev]);
+    setBulkText("");
+    setBulkBuyer("");
+    setTab("settlement");
+  }
+
+  function parseBulkProducts() {
+    const parsed = bulkProductText
+      .split("
+")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+        if (parts.length < 3) return null;
+
+        const sellPrice = Number(parts[parts.length - 1].replace(/[^0-9]/g, ""));
+        const buyPrice = Number(parts[parts.length - 2].replace(/[^0-9]/g, ""));
+        const name = parts.slice(0, -2).join(" ");
+        if (!name || !buyPrice) return null;
+
+        return {
+          id: Date.now() + Math.random(),
+          name,
+          buyPrice,
+          sellPrice: sellPrice || 0,
+        };
+      })
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      alert("인식된 용품이 없습니다. 예: 테너지05 63000 72000");
+      return;
+    }
+
+    setProducts((prev) => {
+      const next = [...prev];
+      parsed.forEach((item) => {
+        const index = next.findIndex((product) => normalizeName(product.name) === normalizeName(item.name));
+        if (index >= 0) {
+          next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
+        } else {
+          next.push(item);
+        }
+      });
+      return next;
+    });
+
+    setBulkProductText("");
   }
 
   function updateOrder(id, key, value) {
-    setOrders((prev) => prev.map((o) => o.id === id ? { ...o, [key]: value } : o));
+    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, [key]: value } : order)));
   }
 
   function deleteOrder(id) {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setOrders((prev) => prev.filter((order) => order.id !== id));
   }
 
   function addProduct() {
     if (!newProduct.name.trim()) return;
-    setProducts((prev) => [...prev, { id: Date.now(), name: newProduct.name.trim(), buyPrice: Number(newProduct.buyPrice || 0), sellPrice: Number(newProduct.sellPrice || 0) }]);
+    setProducts((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        name: newProduct.name.trim(),
+        buyPrice: Number(newProduct.buyPrice || 0),
+        sellPrice: Number(newProduct.sellPrice || 0),
+      },
+    ]);
     setNewProduct({ name: "", buyPrice: "", sellPrice: "" });
   }
 
   function updateProduct(id, key, value) {
-    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, [key]: key === "name" ? value : Number(value || 0) } : p));
+    setProducts((prev) =>
+      prev.map((product) =>
+        product.id === id ? { ...product, [key]: key === "name" ? value : Number(value || 0) } : product
+      )
+    );
   }
 
   function deleteProduct(id) {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setProducts((prev) => prev.filter((product) => product.id !== id));
   }
 
   function downloadBackup() {
-    const blob = new Blob([JSON.stringify({ products, orders }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ products, orders, darkMode }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `정무_정산앱_백업_${today()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadExcelCsv() {
+    const headers = ["날짜", "주문자", "용품명", "수량", "받는가격", "판매가격", "총받는가격", "총판매금액", "정산금", "완료여부"];
+    const csvRows = visibleOrders.map((order) => [
+      koreanDate(order.date),
+      order.buyer || "",
+      order.productName || "",
+      order.qty || 0,
+      order.buyPrice || 0,
+      order.sellPrice || 0,
+      order.totalBuy || 0,
+      order.totalSell || 0,
+      order.profit || 0,
+      order.done ? "완료" : "미완료",
+    ]);
+    const summaryRows = [[], ["합계", "", "", "", "", "", totals.totalBuy, totals.totalSell, totals.profit, ""]];
+    const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
+    const csvContent = [headers, ...csvRows, ...summaryRows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("
+");
+    const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `정무_정산내역_${today()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -131,6 +354,7 @@ export default function App() {
         const data = JSON.parse(String(reader.result));
         if (Array.isArray(data.products)) setProducts(data.products);
         if (Array.isArray(data.orders)) setOrders(data.orders);
+        if (typeof data.darkMode === "boolean") setDarkMode(data.darkMode);
       } catch {
         alert("백업 파일을 불러오지 못했습니다.");
       }
@@ -138,110 +362,509 @@ export default function App() {
     reader.readAsText(file);
   }
 
+  const pageClass = darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900";
+  const headerClass = darkMode ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white/90";
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-violet-100 via-pink-50 to-sky-100 p-3 text-slate-900 sm:p-5">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <section className="rounded-[2rem] bg-white/90 p-5 shadow-xl backdrop-blur">
-          <p className="text-sm font-bold text-violet-500">{koreanDate(today())}</p>
-          <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <main className={`min-h-screen ${pageClass}`}>
+      <div className="mx-auto max-w-5xl pb-24">
+        <header className={`sticky top-0 z-20 border-b px-4 py-4 backdrop-blur ${headerClass}`}>
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-violet-700">정무의 정산앱</h1>
-              <p className="mt-1 text-sm text-slate-500">폰에서 편하게 쓰는 탁구용품 정산 관리</p>
+              <p className="text-xs font-bold text-violet-500">{koreanDate(today())}</p>
+              <h1 className="text-2xl font-black tracking-tight">정무의 정산앱</h1>
+              <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                <CheckCircle2 size={13} /> {savedText}
+              </p>
             </div>
-            <button onClick={addOrder} className="rounded-2xl bg-violet-600 px-5 py-3 font-black text-white shadow-lg shadow-violet-200">+ 정산 추가</button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDarkMode((prev) => !prev)}
+                className={`rounded-2xl p-3 ${darkMode ? "bg-slate-800 text-yellow-300" : "bg-slate-100 text-slate-700"}`}
+              >
+                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
+                onClick={() => addOrder()}
+                className="rounded-2xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-violet-200"
+              >
+                + 정산
+              </button>
+            </div>
           </div>
-        </section>
+        </header>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SummaryCard icon={<Package size={22} />} title="총 받는가격" value={won(totals.totalBuy)} color="from-blue-500 to-sky-500" />
-          <SummaryCard icon={<WalletCards size={22} />} title="총 파는가격" value={won(totals.totalSell)} color="from-pink-500 to-rose-500" />
-          <SummaryCard icon={<Calculator size={22} />} title="총 정산금" value={won(totals.profit)} color="from-emerald-500 to-teal-500" />
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-black">정산 내역</h2>
-            <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
-              <option value="all">전체 날짜</option>
-              {dates.map((date) => <option key={date} value={date}>{koreanDate(date)}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-3">
-            {visibleOrders.length === 0 && <div className="rounded-3xl bg-slate-50 p-6 text-center text-sm text-slate-500">아직 정산 내역이 없습니다.</div>}
-            {visibleOrders.map((order) => (
-              <div key={order.id} className="rounded-3xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
-                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <input type="date" value={order.date} onChange={(e) => updateOrder(order.id, "date", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3" />
-                  <input value={order.buyer} onChange={(e) => updateOrder(order.id, "buyer", e.target.value)} placeholder="시킨사람" className="rounded-2xl border border-slate-200 px-3 py-3" />
-                  <button onClick={() => deleteOrder(order.id)} className="rounded-2xl bg-rose-100 px-3 py-3 font-bold text-rose-600 sm:ml-auto">삭제</button>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_0.6fr]">
-                  <select value={order.productName} onChange={(e) => updateOrder(order.id, "productName", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3">
-                    {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                  </select>
-                  <input type="number" value={order.qty} onChange={(e) => updateOrder(order.id, "qty", e.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3 text-center" placeholder="수량" />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-                  <Info label="받는가격" value={won(order.buyPrice)} color="bg-blue-50 text-blue-700" />
-                  <Info label="파는가격" value={won(order.sellPrice)} color="bg-pink-50 text-pink-700" />
-                  <Info label="총받는가격" value={won(order.totalBuy)} color="bg-slate-100 text-slate-700" />
-                  <Info label="총파는가격" value={won(order.totalSell)} color="bg-violet-50 text-violet-700" />
-                  <Info label="정산금" value={won(order.profit)} color="bg-emerald-50 text-emerald-700" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-black">용품 가격 저장</h2>
-            <Save className="text-violet-600" />
-          </div>
-          <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
-            <Search size={18} className="text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="용품 검색" className="w-full bg-transparent text-sm outline-none" />
-          </div>
-          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.7fr_0.7fr_auto]">
-            <input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="새 용품명" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <input value={newProduct.buyPrice} onChange={(e) => setNewProduct({ ...newProduct, buyPrice: e.target.value })} type="number" placeholder="받는가격" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <input value={newProduct.sellPrice} onChange={(e) => setNewProduct({ ...newProduct, sellPrice: e.target.value })} type="number" placeholder="파는가격" className="rounded-2xl border border-slate-200 px-3 py-3" />
-            <button onClick={addProduct} className="rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">추가</button>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="rounded-3xl bg-gradient-to-br from-violet-50 to-pink-50 p-3">
-                <div className="mb-2 flex gap-2">
-                  <input value={product.name} onChange={(e) => updateProduct(product.id, "name", e.target.value)} className="w-full rounded-2xl bg-white px-3 py-2 font-bold outline-none" />
-                  <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-white px-3 text-rose-500"><Trash2 size={16} /></button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs font-bold text-blue-600">받는가격<input type="number" value={product.buyPrice} onChange={(e) => updateProduct(product.id, "buyPrice", e.target.value)} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-slate-900 outline-none" /></label>
-                  <label className="text-xs font-bold text-pink-600">파는가격<input type="number" value={product.sellPrice} onChange={(e) => updateProduct(product.id, "sellPrice", e.target.value)} className="mt-1 w-full rounded-2xl bg-white px-3 py-2 text-slate-900 outline-none" /></label>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] bg-white p-4 shadow-xl">
-          <h2 className="mb-3 text-xl font-black">백업 / 복원</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white"><Download size={18} /> 백업 파일 다운로드</button>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white"><Upload size={18} /> 백업 파일 불러오기<input type="file" accept="application/json" onChange={uploadBackup} className="hidden" /></label>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">폰/컴퓨터를 같이 쓰려면 백업 파일을 옮겨서 불러오면 됩니다.</p>
-        </section>
+        <div className="space-y-4 p-4">
+          {tab === "settlement" ? (
+            <SettlementTab
+              darkMode={darkMode}
+              totals={totals}
+              dates={dates}
+              dateFilter={dateFilter}
+              setDateFilter={setDateFilter}
+              buyerSearch={buyerSearch}
+              setBuyerSearch={setBuyerSearch}
+              visibleOrders={visibleOrders}
+              recentOrders={recentOrders}
+              monthlyStats={monthlyStats}
+              products={products}
+              quickProducts={quickProducts}
+              bulkText={bulkText}
+              setBulkText={setBulkText}
+              bulkBuyer={bulkBuyer}
+              setBulkBuyer={setBulkBuyer}
+              parseBulkOrders={parseBulkOrders}
+              addOrder={addOrder}
+              updateOrder={updateOrder}
+              deleteOrder={deleteOrder}
+              downloadExcelCsv={downloadExcelCsv}
+            />
+          ) : (
+            <ProductTab
+              bulkProductText={bulkProductText}
+              setBulkProductText={setBulkProductText}
+              parseBulkProducts={parseBulkProducts}
+              darkMode={darkMode}
+              products={products}
+              filteredProducts={filteredProducts}
+              productSearch={productSearch}
+              setProductSearch={setProductSearch}
+              newProduct={newProduct}
+              setNewProduct={setNewProduct}
+              addProduct={addProduct}
+              updateProduct={updateProduct}
+              deleteProduct={deleteProduct}
+              downloadBackup={downloadBackup}
+              uploadBackup={uploadBackup}
+            />
+          )}
+        </div>
       </div>
+
+      <nav className={`fixed bottom-0 left-0 right-0 z-30 border-t px-4 py-3 backdrop-blur ${headerClass}`}>
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+          <TabButton active={tab === "settlement"} onClick={() => setTab("settlement")} icon={<Home size={20} />} label="정산" />
+          <TabButton active={tab === "products"} onClick={() => setTab("products")} icon={<Settings size={20} />} label="용품관리" />
+        </div>
+      </nav>
     </main>
   );
 }
 
-function SummaryCard({ icon, title, value, color }) {
-  return <div className={`rounded-[2rem] bg-gradient-to-br ${color} p-5 text-white shadow-xl`}><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20">{icon}</div><p className="text-sm font-bold opacity-80">{title}</p><p className="mt-1 text-2xl font-black">{value}</p></div>;
+function SettlementTab({
+  darkMode,
+  totals,
+  dates,
+  dateFilter,
+  setDateFilter,
+  buyerSearch,
+  setBuyerSearch,
+  visibleOrders,
+  recentOrders,
+  monthlyStats,
+  products,
+  quickProducts,
+  bulkText,
+  setBulkText,
+  bulkBuyer,
+  setBulkBuyer,
+  parseBulkOrders,
+  addOrder,
+  updateOrder,
+  deleteOrder,
+  downloadExcelCsv,
+}) {
+  const card = darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100";
+
+  return (
+    <>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryCard darkMode={darkMode} icon={<Package size={22} />} title="총 받는금액" value={won(totals.totalBuy)} />
+        <SummaryCard darkMode={darkMode} icon={<WalletCards size={22} />} title="총 판매금액" value={won(totals.totalSell)} />
+        <SummaryCard darkMode={darkMode} icon={<Calculator size={22} />} title="총 정산금" value={won(totals.profit)} highlight />
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black">엑셀 다운로드</h2>
+            <p className="text-xs text-slate-500">현재 보이는 정산 내역을 CSV 파일로 저장합니다.</p>
+          </div>
+          <button
+            onClick={downloadExcelCsv}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 font-bold text-white shadow-lg shadow-emerald-100"
+          >
+            <FileSpreadsheet size={18} /> 엑셀 다운로드
+          </button>
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">대량 입력 자동정리</h2>
+        <div className="space-y-2">
+          <input
+            value={bulkBuyer}
+            onChange={(e) => setBulkBuyer(e.target.value)}
+            placeholder="주문자명, 비워도 됨"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+          />
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={`예시
+MXP 4장
+테너지05 3장
+디그닉스 05 3장
+넥시시합구6구 2개
+이너포스 ALC 1개`}
+            rows={6}
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+          />
+          <button
+            onClick={parseBulkOrders}
+            className="w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white shadow-lg shadow-violet-100"
+          >
+            자동으로 정산 추가
+          </button>
+          <p className="text-xs text-slate-500">용품명과 숫자를 자동으로 읽어서 정산 내역에 추가합니다.</p>
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">빠른 용품 선택</h2>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {quickProducts.map((product) => (
+            <button
+              key={product.id}
+              onClick={() => addOrder(product.name)}
+              className="shrink-0 rounded-2xl bg-violet-100 px-4 py-3 text-sm font-black text-violet-700"
+            >
+              {product.name}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-black">정산 내역</h2>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input
+              value={buyerSearch}
+              onChange={(e) => setBuyerSearch(e.target.value)}
+              placeholder="주문자 검색"
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none"
+            />
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none"
+            >
+              <option value="all">전체 날짜</option>
+              {dates.map((date) => (
+                <option key={date} value={date}>{koreanDate(date)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {visibleOrders.length === 0 && (
+            <div className="rounded-3xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+              정산 내역이 없습니다. + 정산 버튼을 눌러 추가하세요.
+            </div>
+          )}
+
+          {visibleOrders.map((order) => (
+            <OrderCard
+              key={order.id}
+              darkMode={darkMode}
+              order={order}
+              products={products}
+              updateOrder={updateOrder}
+              deleteOrder={deleteOrder}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">최근 정산</h2>
+        {recentOrders.length === 0 ? (
+          <p className="text-sm text-slate-500">최근 정산 내역이 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {recentOrders.map((order) => (
+              <div key={order.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-900">
+                <div>
+                  <p className="font-black">{order.buyer || "이름 없음"} · {order.productName}</p>
+                  <p className="text-xs text-slate-500">{koreanDate(order.date)} / {order.qty}개</p>
+                </div>
+                <p className="font-black text-emerald-600">{won(order.profit)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">월별 통계</h2>
+        {monthlyStats.length === 0 ? (
+          <p className="text-sm text-slate-500">월별 통계가 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {monthlyStats.map((item) => (
+              <div key={item.month} className="rounded-2xl bg-slate-50 p-3 text-slate-900">
+                <div className="flex items-center justify-between">
+                  <p className="font-black">{item.month}</p>
+                  <p className="text-xs text-slate-500">{item.count}건</p>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <Info label="받는금액" value={won(item.totalBuy)} />
+                  <Info label="판매금액" value={won(item.totalSell)} />
+                  <Info label="정산금" value={won(item.profit)} green />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
 }
 
-function Info({ label, value, color }) {
-  return <div className={`rounded-2xl p-3 ${color}`}><p className="text-xs font-bold opacity-70">{label}</p><p className="mt-1 font-black">{value}</p></div>;
+function OrderCard({ darkMode, order, products, updateOrder, deleteOrder }) {
+  return (
+    <article className={`rounded-3xl border p-4 ${order.done ? "border-emerald-200 bg-emerald-50" : darkMode ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50"}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <input
+          type="date"
+          value={order.date}
+          onChange={(e) => updateOrder(order.id, "date", e.target.value)}
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => updateOrder(order.id, "done", !order.done)}
+            className={`rounded-2xl px-3 py-2 text-sm font-bold ${order.done ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"}`}
+          >
+            {order.done ? "완료" : "미완료"}
+          </button>
+          <button onClick={() => deleteOrder(order.id)} className="rounded-2xl bg-rose-100 px-3 py-2 text-sm font-bold text-rose-600">
+            삭제
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <input
+          value={order.buyer}
+          onChange={(e) => updateOrder(order.id, "buyer", e.target.value)}
+          placeholder="시킨사람"
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-900 outline-none"
+        />
+        <select
+          value={order.productName}
+          onChange={(e) => updateOrder(order.id, "productName", e.target.value)}
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-900 outline-none"
+        >
+          {products.map((product) => (
+            <option key={product.id} value={product.name}>{product.name}</option>
+          ))}
+        </select>
+        <input
+          type="number"
+          value={order.qty}
+          onChange={(e) => updateOrder(order.id, "qty", e.target.value)}
+          placeholder="수량"
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center text-slate-900 outline-none"
+        />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+        <Info label="받는가격" value={won(order.buyPrice)} />
+        <Info label="판매가격" value={won(order.sellPrice)} />
+        <Info label="총받는가격" value={won(order.totalBuy)} />
+        <Info label="총판매금액" value={won(order.totalSell)} />
+        <Info label="정산금" value={won(order.profit)} green />
+      </div>
+    </article>
+  );
+}
+
+function ProductTab({
+  bulkProductText,
+  setBulkProductText,
+  parseBulkProducts,
+  darkMode,
+  products,
+  filteredProducts,
+  productSearch,
+  setProductSearch,
+  newProduct,
+  setNewProduct,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  downloadBackup,
+  uploadBackup,
+}) {
+  const card = darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100";
+
+  return (
+    <>
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black">용품 가격 관리</h2>
+            <p className="text-xs text-slate-500">총 {products.length}개 용품 저장됨</p>
+          </div>
+          <Save className="text-violet-600" />
+        </div>
+
+        <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
+          <Search size={18} className="text-slate-400" />
+          <input
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+            placeholder="용품 검색"
+            className="w-full bg-transparent text-sm text-slate-900 outline-none"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_0.7fr_0.7fr_auto]">
+          <input
+            value={newProduct.name}
+            onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+            placeholder="새 용품명"
+            className="rounded-2xl border border-slate-200 px-3 py-3 text-slate-900 outline-none"
+          />
+          <input
+            value={newProduct.buyPrice}
+            onChange={(e) => setNewProduct({ ...newProduct, buyPrice: e.target.value })}
+            type="number"
+            placeholder="받는가격"
+            className="rounded-2xl border border-slate-200 px-3 py-3 text-slate-900 outline-none"
+          />
+          <input
+            value={newProduct.sellPrice}
+            onChange={(e) => setNewProduct({ ...newProduct, sellPrice: e.target.value })}
+            type="number"
+            placeholder="판매가격"
+            className="rounded-2xl border border-slate-200 px-3 py-3 text-slate-900 outline-none"
+          />
+          <button onClick={addProduct} className="rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
+            추가
+          </button>
+        </div>
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
+        <textarea
+          value={bulkProductText}
+          onChange={(e) => setBulkProductText(e.target.value)}
+          placeholder={`예시
+테너지05 63000 72000
+MXP 40000 48000
+로제나 28000 35000`}
+          rows={5}
+          className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+        />
+        <button
+          onClick={parseBulkProducts}
+          className="mt-3 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
+        >
+          용품 가격 자동 저장
+        </button>
+        <p className="mt-2 text-xs text-slate-500">용품명 + 받는가격 + 판매가격을 자동 인식합니다.</p>
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {filteredProducts.map((product) => (
+          <article key={product.id} className={`rounded-3xl border p-4 shadow-sm ${card}`}>
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                value={product.name}
+                onChange={(e) => updateProduct(product.id, "name", e.target.value)}
+                className="w-full rounded-2xl bg-slate-50 px-3 py-3 font-bold text-slate-900 outline-none"
+              />
+              <button onClick={() => deleteProduct(product.id)} className="rounded-2xl bg-rose-100 p-3 text-rose-600">
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-bold text-blue-600">
+                받는가격
+                <input
+                  type="number"
+                  value={product.buyPrice}
+                  onChange={(e) => updateProduct(product.id, "buyPrice", e.target.value)}
+                  className="mt-1 w-full rounded-2xl bg-blue-50 px-3 py-3 text-slate-900 outline-none"
+                />
+              </label>
+              <label className="text-xs font-bold text-violet-600">
+                판매가격
+                <input
+                  type="number"
+                  value={product.sellPrice}
+                  onChange={(e) => updateProduct(product.id, "sellPrice", e.target.value)}
+                  className="mt-1 w-full rounded-2xl bg-violet-50 px-3 py-3 text-slate-900 outline-none"
+                />
+              </label>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <h2 className="mb-3 text-lg font-black">백업 / 복원</h2>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button onClick={downloadBackup} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-bold text-white">
+            <Download size={18} /> 백업 다운로드
+          </button>
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-bold text-white">
+            <Upload size={18} /> 백업 불러오기
+            <input type="file" accept="application/json" onChange={uploadBackup} className="hidden" />
+          </label>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function SummaryCard({ darkMode, icon, title, value, highlight }) {
+  const normal = darkMode ? "bg-slate-900 text-slate-100 border border-slate-800" : "bg-white text-slate-900 border border-slate-100";
+  return (
+    <div className={`rounded-[1.7rem] p-4 shadow-sm ${highlight ? "bg-violet-600 text-white" : normal}`}>
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl ${highlight ? "bg-white/20" : "bg-violet-100 text-violet-600"}`}>
+        {icon}
+      </div>
+      <p className={`text-xs font-bold ${highlight ? "text-violet-100" : "text-slate-500"}`}>{title}</p>
+      <p className="mt-1 text-xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function Info({ label, value, green }) {
+  return (
+    <div className={`rounded-2xl p-3 ${green ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-800"}`}>
+      <p className="text-xs font-bold opacity-60">{label}</p>
+      <p className="mt-1 font-black">{value}</p>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
+        active ? "bg-violet-600 text-white shadow-lg shadow-violet-200" : "bg-slate-100 text-slate-500"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 }
