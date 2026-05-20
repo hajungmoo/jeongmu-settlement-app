@@ -184,7 +184,7 @@ export default function App() {
       .filter(Boolean)
       .map((line) => {
         const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
-        if (parts.length < 2) return null;
+        if (parts.length < 3) return null;
         const last = parts[parts.length - 1];
         const qtyText = last
           .replaceAll("장", "")
@@ -234,48 +234,28 @@ function parseBulkProducts() {
     .filter(Boolean)
     .map((line) => {
       const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
-      if (parts.length < 2) return null;
 
-      const sellPrice = Number(parts[parts.length - 1].replace(/[^0-9]/g, ""));
-      const buyPrice = Number(parts[parts.length - 2].replace(/[^0-9]/g, ""));
+      if (parts.length < 3) return null;
+
+      const sellPrice = Number(parts[parts.length - 1]);
+      const buyPrice = Number(parts[parts.length - 2]);
       const name = parts.slice(0, -2).join(" ");
-
-      if (!name || !buyPrice) return null;
 
       return {
         id: Date.now() + Math.random(),
         name,
         buyPrice,
-        sellPrice: sellPrice || 0,
+        sellPrice,
       };
     })
     .filter(Boolean);
 
   if (parsed.length === 0) {
-    alert("인식된 용품이 없습니다. 예: 테너지05 63000 72000");
+    alert("인식된 용품이 없습니다.");
     return;
   }
 
-  setProducts((prev) => {
-    const next = [...prev];
-
-    parsed.forEach((item) => {
-      const index = next.findIndex(
-        (product) =>
-          product.name.replaceAll(" ", "").toLowerCase() ===
-          item.name.replaceAll(" ", "").toLowerCase()
-      );
-
-      if (index >= 0) {
-        next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
-      } else {
-        next.push(item);
-      }
-    });
-
-    return next;
-  });
-
+  setProducts((prev) => [...prev, ...parsed]);
   setBulkProductText("");
 }
     .split(/\n/)
