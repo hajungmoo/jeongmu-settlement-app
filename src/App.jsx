@@ -178,7 +178,7 @@ export default function App() {
 
   function parseBulkOrders() {
     const parsed = bulkText
-      .split(/\\n/)
+      .split(/\n/)
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
@@ -281,8 +281,7 @@ export default function App() {
     const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
     const csvContent = [headers, ...csvRows, ...summaryRows]
       .map((row) => row.map(escapeCsv).join(","))
-      .join("
-");
+      .join("\n");
     const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
