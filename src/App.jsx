@@ -278,6 +278,35 @@ function parseBulkProducts() {
 
   setBulkProductText("");
 }
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
+
+      if (parts.length < 3) return null;
+
+      const sellPrice = Number(parts[parts.length - 1]);
+      const buyPrice = Number(parts[parts.length - 2]);
+      const name = parts.slice(0, -2).join(" ");
+
+      return {
+        id: Date.now() + Math.random(),
+        name,
+        buyPrice,
+        sellPrice,
+      };
+    })
+    .filter(Boolean);
+
+  if (parsed.length === 0) {
+    alert("인식된 용품이 없습니다.");
+    return;
+  }
+
+  setProducts((prev) => [...prev, ...parsed]);
+  setBulkProductText("");
+}
   function addProduct() {
     if (!newProduct.name.trim()) return;
     setProducts((prev) => [
@@ -391,71 +420,51 @@ function parseBulkProducts() {
           </div>
         </header>
 
-        <div className="space-y-4 p-4">
-          {tab === "settlement" ? (
-            <SettlementTab
-              darkMode={darkMode}
-              totals={totals}
-              dates={dates}
-              dateFilter={dateFilter}
-              setDateFilter={setDateFilter}
-              buyerSearch={buyerSearch}
-              setBuyerSearch={setBuyerSearch}
-              visibleOrders={visibleOrders}
-              recentOrders={recentOrders}
-              monthlyStats={monthlyStats}
-              products={products}
-              quickProducts={quickProducts}
-              bulkText={bulkText}
-              setBulkText={setBulkText}
-              bulkBuyer={bulkBuyer}
-              setBulkBuyer={setBulkBuyer}
-              parseBulkOrders={parseBulkOrders}
-              addOrder={addOrder}
-              updateOrder={updateOrder}
-              deleteOrder={deleteOrder}
-              downloadExcelCsv={downloadExcelCsv}
-            />
-          ) : (
-            <ProductTab
-              <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
-  <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
-  <textarea
-    value={bulkProductText}
-    onChange={(e) => setBulkProductText(e.target.value)}
-    placeholder={`예시
-테너지05 63000 72000
-MXP 40000 48000
-로제나 28000 35000`}
-    rows={5}
-    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
-  />
-  <button
-    onClick={parseBulkProducts}
-    className="mt-2 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
-  >
-    용품 가격 자동 저장
-  </button>
-</section>
-              bulkProductText={bulkProductText}
-setBulkProductText={setBulkProductText}
-parseBulkProducts={parseBulkProducts}
-              darkMode={darkMode}
-              products={products}
-              filteredProducts={filteredProducts}
-              productSearch={productSearch}
-              setProductSearch={setProductSearch}
-              newProduct={newProduct}
-              setNewProduct={setNewProduct}
-              addProduct={addProduct}
-              updateProduct={updateProduct}
-              deleteProduct={deleteProduct}
-              downloadBackup={downloadBackup}
-              uploadBackup={uploadBackup}
-            />
-          )}
-        </div>
-      </div>
+<div className="space-y-4 p-4">
+  {tab === "settlement" ? (
+    <SettlementTab
+      darkMode={darkMode}
+      totals={totals}
+      dates={dates}
+      dateFilter={dateFilter}
+      setDateFilter={setDateFilter}
+      buyerSearch={buyerSearch}
+      setBuyerSearch={setBuyerSearch}
+      visibleOrders={visibleOrders}
+      recentOrders={recentOrders}
+      monthlyStats={monthlyStats}
+      products={products}
+      quickProducts={quickProducts}
+      bulkText={bulkText}
+      setBulkText={setBulkText}
+      bulkBuyer={bulkBuyer}
+      setBulkBuyer={setBulkBuyer}
+      parseBulkOrders={parseBulkOrders}
+      addOrder={addOrder}
+      updateOrder={updateOrder}
+      deleteOrder={deleteOrder}
+      downloadExcelCsv={downloadExcelCsv}
+    />
+  ) : (
+    <ProductTab
+      bulkProductText={bulkProductText}
+      setBulkProductText={setBulkProductText}
+      parseBulkProducts={parseBulkProducts}
+      darkMode={darkMode}
+      products={products}
+      filteredProducts={filteredProducts}
+      productSearch={productSearch}
+      setProductSearch={setProductSearch}
+      newProduct={newProduct}
+      setNewProduct={setNewProduct}
+      addProduct={addProduct}
+      updateProduct={updateProduct}
+      deleteProduct={deleteProduct}
+      downloadBackup={downloadBackup}
+      uploadBackup={uploadBackup}
+    />
+  )}
+</div>
 
       <nav className={`fixed bottom-0 left-0 right-0 z-30 border-t px-4 py-3 backdrop-blur ${headerClass}`}>
         <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
@@ -710,8 +719,8 @@ function OrderCard({ darkMode, order, products, updateOrder, deleteOrder }) {
 
 function ProductTab({
   bulkProductText,
-setBulkProductText,
-parseBulkProducts,
+  setBulkProductText,
+  parseBulkProducts,
   darkMode,
   products,
   filteredProducts,
@@ -739,6 +748,31 @@ parseBulkProducts,
         </div>
 
         <div className="mb-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2">
+          <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+  <h2 className="mb-3 text-lg font-black">용품 대량 입력</h2>
+
+  <textarea
+    value={bulkProductText}
+    onChange={(e) => setBulkProductText(e.target.value)}
+    placeholder={`예시
+테너지05 63000 72000
+MXP 40000 48000
+로제나 28000 35000`}
+    rows={5}
+    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none"
+  />
+
+  <button
+    onClick={parseBulkProducts}
+    className="mt-3 w-full rounded-2xl bg-violet-600 px-4 py-3 font-black text-white"
+  >
+    용품 가격 자동 저장
+  </button>
+
+  <p className="mt-2 text-xs text-slate-500">
+    용품명 + 받는가격 + 판매가격을 자동 인식합니다.
+  </p>
+</section>
           <Search size={18} className="text-slate-400" />
           <input
             value={productSearch}
