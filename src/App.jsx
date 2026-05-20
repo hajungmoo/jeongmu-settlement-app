@@ -3,6 +3,7 @@ import {
   Calculator,
   CheckCircle2,
   Download,
+  FileSpreadsheet,
   Home,
   Moon,
   Package,
@@ -205,6 +206,35 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadExcelCsv() {
+    const headers = ["날짜", "주문자", "용품명", "수량", "받는가격", "판매가격", "총받는가격", "총판매금액", "정산금", "완료여부"];
+    const csvRows = visibleOrders.map((order) => [
+      koreanDate(order.date),
+      order.buyer || "",
+      order.productName || "",
+      order.qty || 0,
+      order.buyPrice || 0,
+      order.sellPrice || 0,
+      order.totalBuy || 0,
+      order.totalSell || 0,
+      order.profit || 0,
+      order.done ? "완료" : "미완료",
+    ]);
+    const summaryRows = [[], ["합계", "", "", "", "", "", totals.totalBuy, totals.totalSell, totals.profit, ""]];
+    const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
+    const csvContent = [headers, ...csvRows, ...summaryRows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("
+");
+    const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `정무_정산내역_${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function uploadBackup(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -272,6 +302,7 @@ export default function App() {
               addOrder={addOrder}
               updateOrder={updateOrder}
               deleteOrder={deleteOrder}
+              downloadExcelCsv={downloadExcelCsv}
             />
           ) : (
             <ProductTab
@@ -318,6 +349,7 @@ function SettlementTab({
   addOrder,
   updateOrder,
   deleteOrder,
+  downloadExcelCsv,
 }) {
   const card = darkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100";
 
@@ -327,6 +359,21 @@ function SettlementTab({
         <SummaryCard darkMode={darkMode} icon={<Package size={22} />} title="총 받는금액" value={won(totals.totalBuy)} />
         <SummaryCard darkMode={darkMode} icon={<WalletCards size={22} />} title="총 판매금액" value={won(totals.totalSell)} />
         <SummaryCard darkMode={darkMode} icon={<Calculator size={22} />} title="총 정산금" value={won(totals.profit)} highlight />
+      </section>
+
+      <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black">엑셀 다운로드</h2>
+            <p className="text-xs text-slate-500">현재 보이는 정산 내역을 CSV 파일로 저장합니다.</p>
+          </div>
+          <button
+            onClick={downloadExcelCsv}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 font-bold text-white shadow-lg shadow-emerald-100"
+          >
+            <FileSpreadsheet size={18} /> 엑셀 다운로드
+          </button>
+        </div>
       </section>
 
       <section className={`rounded-[1.7rem] border p-4 shadow-sm ${card}`}>
