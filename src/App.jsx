@@ -181,11 +181,10 @@ export default function App() {
     setTab("settlement");
   }
 
-  function parseBulkOrders() {
-    const parsed = bulkText
-      .split("
-")
-      .map((line) => line.trim())
+function parseBulkOrders() {
+  const parsed = bulkText
+    .split("\n")
+    .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
         const parts = line.replaceAll(",", " ").split(" ").filter(Boolean);
@@ -229,8 +228,7 @@ export default function App() {
 
   function parseBulkProducts() {
     const parsed = bulkProductText
-      .split("
-")
+     .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
