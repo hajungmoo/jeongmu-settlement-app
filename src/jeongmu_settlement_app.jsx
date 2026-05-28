@@ -254,7 +254,9 @@ export default function App() {
     setProducts((prev) => {
       const next = [...prev];
       parsed.forEach((item) => {
-        const index = next.findIndex((product) => normalizeName(product.name) === normalizeName(item.name));
+       const index = next.findIndex(
+  (product) => product.name.trim() === item.name.trim()
+);
         if (index >= 0) {
           next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
         } else {
