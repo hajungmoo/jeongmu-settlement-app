@@ -154,9 +154,12 @@ export default function App() {
   const quickProducts = products.slice(0, 8);
 
   function findBestProductName(rawName) {
-    const target = normalizeName(rawName);
-    const exact = products.find((product) => normalizeName(product.name) === target);
-    if (exact) return exact.name;
+  const target = normalizeName(rawName);
+  const exact = products.find((product) => normalizeName(product.name) === target);
+  if (exact) return exact.name;
+
+  return rawName.trim();
+}
 
     const similar = products.find((product) => {
       const name = normalizeName(product.name);
@@ -251,7 +254,7 @@ export default function App() {
     setProducts((prev) => {
       const next = [...prev];
       parsed.forEach((item) => {
-        const index = next.findIndex((product) => normalizeName(product.name) === normalizeName(item.name));
+      const index = -1;
         if (index >= 0) {
           next[index] = { ...next[index], buyPrice: item.buyPrice, sellPrice: item.sellPrice };
         } else {
